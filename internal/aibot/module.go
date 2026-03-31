@@ -17,6 +17,10 @@ var Module = fx.Module("aibot",
 					return err
 				}
 
+				if err := gs.SubscribeMigrationEvents(); err != nil {
+					return err
+				}
+
 				channels, err := client.ListChannels(ctx, "", "")
 				if err != nil {
 					return err

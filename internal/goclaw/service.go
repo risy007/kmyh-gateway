@@ -501,3 +501,35 @@ func (s *GoclawService) DownloadFile(fileURL, outputPath string) (string, error)
 	}
 	return outputPath + ext, nil
 }
+
+func (s *GoclawService) HandleTenantMigration(tenantID, oldServerID, newServerID, newTenantID string) error {
+	s.wsClientMu.Lock()
+	defer s.wsClientMu.Unlock()
+
+	if client, ok := s.wsClientCache[tenantID]; ok {
+		s.log.Info("关闭迁移租户的旧连接",
+			zap.String("tenant_id", tenantID),
+			zap.String("old_server_id", oldServerID))
+		client.Close()
+		delete(s.wsClientCache, tenantID)
+	}
+
+	s.log.Info("租户迁移处理完成",
+		zap.String("tenant_id", tenantID),
+		zap.String("old_server_id", oldServerID),
+		zap.String("new_server_id", newServerID),
+		zap.String("new_tenant_id", newTenantID))
+
+	return nil
+}
+
+func (s *GoclawService) RemoveWSClient(tenantID string) {
+	s.wsClientMu.Lock()
+	defer s.wsClientMu.Unlock()
+
+	if client, ok := s.wsClientCache[tenantID]; ok {
+		client.Close()
+		delete(s.wsClientCache, tenantID)
+		s.log.Info("移除 WSClient", zap.String("tenant_id", tenantID))
+	}
+}

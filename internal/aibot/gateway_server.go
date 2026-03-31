@@ -69,6 +69,40 @@ func (s *GatewayServer) Stop() error {
 	return nil
 }
 
+type TenantMigrationEvent struct {
+	TenantID    string `json:"tenant_id"`
+	OldServerID string `json:"old_server_id"`
+	NewServerID string `json:"new_server_id"`
+	NewTenantID string `json:"new_tenant_id"`
+}
+
+func (s *GatewayServer) SubscribeMigrationEvents() error {
+	if s.nc == nil {
+		s.log.Warn("NATS 连接不可用，跳过迁移事件订阅")
+		return nil
+	}
+
+	_, err := s.nc.Subscribe("aibot.tenant.migrated", func(msg *nats.Msg) {
+		var event TenantMigrationEvent
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			s.log.Error("解析迁移事件失败", zap.Error(err))
+			return
+		}
+
+		s.log.Info("收到租户迁移事件，已记录（下次消息将自动使用新服务器）",
+			zap.String("tenant_id", event.TenantID),
+			zap.String("old_server_id", event.OldServerID),
+			zap.String("new_server_id", event.NewServerID),
+			zap.String("new_tenant_id", event.NewTenantID))
+	})
+	if err != nil {
+		return fmt.Errorf("订阅迁移事件失败: %w", err)
+	}
+
+	s.log.Info("订阅迁移事件成功")
+	return nil
+}
+
 func (s *GatewayServer) registerMicroService() error {
 	s.log.Info("注册 Gateway NATS micro 服务")
 
