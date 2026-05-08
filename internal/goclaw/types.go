@@ -132,11 +132,11 @@ type WSConnectResponse struct {
 // ============ 聊天相关 ============
 
 type ChatSendParams struct {
-	Message     interface{} `json:"message"`
-	AgentID     string      `json:"agentId,omitempty"`
-	SessionKey  string      `json:"sessionKey,omitempty"`
-	Stream      bool        `json:"stream,omitempty"`
-	SystemPrompt string     `json:"systemPrompt,omitempty"`
+	Message      interface{} `json:"message"`
+	AgentID      string      `json:"agentId,omitempty"`
+	SessionKey   string      `json:"sessionKey,omitempty"`
+	Stream       bool        `json:"stream,omitempty"`
+	SystemPrompt string      `json:"systemPrompt,omitempty"`
 }
 
 type ChatSendResponse struct {

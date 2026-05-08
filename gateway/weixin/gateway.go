@@ -244,34 +244,49 @@ func (gw *WxGateway) DeleteChannel(channelID string) error {
 	var tenantSlug string
 	for slug, ch := range gw.channels {
 		_ = ch
-		if slug == channelID || fmt.Sprintf("%s-%s", slug, channelID) == channelID {
+		if slug == channelID {
 			tenantSlug = slug
 			break
 		}
 	}
 
-	if tenantSlug == "" {
-		for slug := range gw.channels {
-			tenantSlug = slug
-			break
+	// 如果按 slug 没找到，按 ChannelInfo 中的 ChannelID 查找
+	// ChannelManager 调用 DeleteChannel 时传入的可能是 channelID 而非 tenantSlug
+	if tenantSlug == "" && gw.channelMgr != nil {
+		if ch, ok := gw.channelMgr.GetChannel(channelID); ok {
+			tenantSlug = ch.TenantSlug
 		}
 	}
 
 	if tenantSlug == "" {
+		// 最后尝试：将 channelID 视为 tenantSlug（兼容直接用 slug 删除的场景）
+		tenantSlug = channelID
+	}
+
+	if ch, ok := gw.channels[tenantSlug]; ok {
+		if ch.cancel != nil {
+			ch.cancel()
+		}
+		delete(gw.channels, tenantSlug)
+		gw.log.Info("[WxGateway] 渠道已删除", zap.String("tenant_slug", tenantSlug))
 		return nil
 	}
 
-	if ch, ok := gw.channels[tenantSlug]; ok && ch.cancel != nil {
-		ch.cancel()
-	}
-
-	delete(gw.channels, tenantSlug)
-
-	return nil
+	return fmt.Errorf("未找到渠道 %s", channelID)
 }
 
 func (gw *WxGateway) PauseChannel(channelID string) error {
 	gw.log.Info("[WxGateway] 暂停渠道", zap.String("channel_id", channelID))
+
+	gw.mu.Lock()
+	defer gw.mu.Unlock()
+
+	if ch, ok := gw.channels[channelID]; ok {
+		if ch.cancel != nil {
+			ch.cancel()
+		}
+	}
+
 	return nil
 }
 
@@ -325,11 +340,6 @@ func (gw *WxGateway) HandleIncomingMessageWithTenant(ctx context.Context, msg *I
 		}
 	}
 
-	if msg.MsgType == "" || msg.MsgType == "event" {
-		gw.log.Debug("忽略事件消息")
-		return nil
-	}
-
 	gw.mu.RLock()
 	aibotClient := gw.aibotClient
 	gw.mu.RUnlock()
@@ -341,16 +351,17 @@ func (gw *WxGateway) HandleIncomingMessageWithTenant(ctx context.Context, msg *I
 	bindInfo, err := aibotClient.GetCustomerBindInfo(ctx, &kmyhconfig.GetCustomerBindInfoRequest{
 		Channel:       "weixin",
 		ChannelUserID: msg.FromUserID,
+		TenantSlug:    tenantSlug,
 	})
 	if err != nil {
 		gw.log.Error("[HandleIncomingMessage] 获取客户绑定信息失败", zap.Error(err))
 		return err
 	}
 
-	if !bindInfo.Found || bindInfo.Info == nil {
-		gw.log.Warn("[HandleIncomingMessage] 未找到客户绑定信息",
+	if !bindInfo.Found || bindInfo.Info == nil || bindInfo.Info.UnifiedUserID == "" {
+		gw.log.Warn("[HandleIncomingMessage] 未找到客户绑定信息或尚未关联统一用户",
 			zap.String("channel_user_id", msg.FromUserID))
-		return nil
+		return gw.sendTextMessage(msg.FromUserID, tenantSlug, "您的账号尚未与系统用户关联，请联系管理员在租户详情页完成统一用户绑定后再使用。")
 	}
 
 	gw.mu.RLock()
@@ -375,25 +386,30 @@ func (gw *WxGateway) HandleIncomingMessageWithTenant(ctx context.Context, msg *I
 		return err
 	}
 
-	return gw.sendAgentResponse(msg.FromUserID, agentResp)
+	return gw.sendAgentResponse(msg.FromUserID, tenantSlug, agentResp)
 }
 
-func (gw *WxGateway) sendAgentResponse(fromUserID string, resp *agent.AgentResponse) error {
+func (gw *WxGateway) sendAgentResponse(fromUserID, tenantSlug string, resp *agent.AgentResponse) error {
 	if resp == nil {
 		return nil
 	}
 
 	gw.mu.RLock()
-	var app *workwx.WorkwxApp
-	for _, ch := range gw.channels {
-		app = ch.app
-		break
+	ch, ok := gw.channels[tenantSlug]
+	if !ok {
+		for _, c := range gw.channels {
+			ch = c
+			ok = true
+			break
+		}
 	}
 	gw.mu.RUnlock()
 
-	if app == nil {
-		return fmt.Errorf("app not initialized")
+	if !ok || ch == nil || ch.app == nil {
+		return fmt.Errorf("app not found for tenant: %s", tenantSlug)
 	}
+
+	app := ch.app
 
 	for _, recipient := range resp.Recipients {
 		switch resp.Type {
@@ -419,7 +435,7 @@ func (gw *WxGateway) HandleWxCallback(msg *IncomingWxMessage) error {
 	return fmt.Errorf("HandleWxCallback is deprecated, use wxRxHandler.OnIncomingMessage instead")
 }
 
-func (gw *WxGateway) sendSuspendedResponse(fromUserID, tenantSlug string, status aibot.ChannelStatus) error {
+func (gw *WxGateway) sendTextMessage(fromUserID, tenantSlug, text string) error {
 	gw.mu.RLock()
 	app := func() *workwx.WorkwxApp {
 		if ch, ok := gw.channels[tenantSlug]; ok {
@@ -436,6 +452,10 @@ func (gw *WxGateway) sendSuspendedResponse(fromUserID, tenantSlug string, status
 		return fmt.Errorf("app not found for tenant: %s", tenantSlug)
 	}
 
+	return app.SendTextMessage(&workwx.Recipient{UserIDs: []string{fromUserID}}, text, false)
+}
+
+func (gw *WxGateway) sendSuspendedResponse(fromUserID, tenantSlug string, status aibot.ChannelStatus) error {
 	var reason string
 	switch status {
 	case aibot.ChannelStatusPaused:
@@ -447,5 +467,5 @@ func (gw *WxGateway) sendSuspendedResponse(fromUserID, tenantSlug string, status
 	}
 
 	msg := fmt.Sprintf("%s，请联系管理员处理。", reason)
-	return app.SendTextMessage(&workwx.Recipient{UserIDs: []string{fromUserID}}, msg, false)
+	return gw.sendTextMessage(fromUserID, tenantSlug, msg)
 }

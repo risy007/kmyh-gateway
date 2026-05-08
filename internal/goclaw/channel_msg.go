@@ -56,8 +56,7 @@ type ChannelMessage struct {
 	RawContent map[string]interface{} `json:"raw_content,omitempty"` // 原始消息内容
 
 	// 元信息
-	Timestamp time.Time `json:"timestamp"`   // 消息时间
-	BotUserID string    `json:"bot_user_id"` // 机器人用户ID（用于多bot配置）
+	Timestamp time.Time `json:"timestamp"` // 消息时间
 }
 
 // MediaFile 媒体文件

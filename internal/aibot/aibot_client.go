@@ -76,12 +76,26 @@ func (c *AIBotClient) GetBindInfo(ctx context.Context, channel, channelUserID st
 		return nil, fmt.Errorf("未找到租户绑定信息: %s", resp.Error)
 	}
 
+	var agentConfigRaw json.RawMessage
+	if resp.Info.AgentConfig != nil {
+		agentConfigRaw, _ = json.Marshal(resp.Info.AgentConfig)
+	}
+
+	var extraRaw json.RawMessage
+	if resp.Info.Extra != nil {
+		extraRaw, _ = json.Marshal(resp.Info.Extra)
+	}
+
 	return &TenantBindInfo{
 		TenantID:      resp.Info.TenantID,
+		TenantSlug:    resp.Info.TenantSlug,
 		UnifiedUserID: resp.Info.UnifiedUserID,
 		AgentID:       resp.Info.AgentID,
 		Channel:       channel,
 		ChannelUserID: channelUserID,
+		AgentType:     resp.Info.AgentType,
+		AgentConfig:   agentConfigRaw,
+		Extra:         extraRaw,
 		Found:         true,
 	}, nil
 }

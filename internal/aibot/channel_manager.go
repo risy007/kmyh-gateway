@@ -188,6 +188,42 @@ func (m *ChannelManager) ResumeChannel(channelType, channelID string) error {
 	return fmt.Errorf("未找到渠道 %s", channelID)
 }
 
+func (m *ChannelManager) GetChannel(channelID string) (*ChannelInfo, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, ch := range m.channels {
+		if ch.ChannelID == channelID {
+			return ch, true
+		}
+	}
+	return nil, false
+}
+
+func (m *ChannelManager) ListChannelsByTenant(tenantID string) []*ChannelInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var channels []*ChannelInfo
+	for _, ch := range m.channels {
+		if ch.TenantID == tenantID {
+			channels = append(channels, ch)
+		}
+	}
+	return channels
+}
+
+func (m *ChannelManager) ListAllChannels() []*ChannelInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	channels := make([]*ChannelInfo, 0, len(m.channels))
+	for _, ch := range m.channels {
+		channels = append(channels, ch)
+	}
+	return channels
+}
+
 func (m *ChannelManager) GetRegisteredTypes() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

@@ -48,38 +48,46 @@ func NewRegistry(in RegistryIn) (*Registry, error) {
 }
 
 func (r *Registry) Process(ctx context.Context, req *AgentRequest) (*AgentResponse, error) {
-	bindInfo, ok := req.Extra["bind_info"]
+	bindInfoRaw, ok := req.Extra["bind_info"]
 	if !ok {
 		return nil, fmt.Errorf("bind_info not found in request extra")
 	}
 
-	var agentType string
-	var agentConfigJSON json.RawMessage
-
-	switch v := bindInfo.(type) {
+	var bindInfo *kmyhconfig.CustomerBindInfo
+	switch v := bindInfoRaw.(type) {
 	case *kmyhconfig.CustomerBindInfo:
-		agentType = "goclaw"
-		agentConfigJSON = r.buildGoclawConfig(v)
+		bindInfo = v
 	case kmyhconfig.CustomerBindInfo:
-		agentType = "goclaw"
-		agentConfigJSON = r.buildGoclawConfig(&v)
-	case map[string]interface{}:
-		if at, ok := v["agent_type"].(string); ok {
-			agentType = at
-		} else {
-			agentType = "goclaw"
-		}
-		if ac, ok := v["agent_config"].(json.RawMessage); ok {
-			agentConfigJSON = ac
-		} else if _, ok := v["base_url"].(string); ok {
-			agentConfigJSON = r.buildGoclawConfigFromMap(v)
-		}
+		bindInfo = &v
 	default:
-		return nil, fmt.Errorf("bind_info has unsupported type %T", bindInfo)
+		return nil, fmt.Errorf("bind_info has unsupported type %T", bindInfoRaw)
 	}
 
+	// Use AgentType from bind_info directly
+	agentType := bindInfo.AgentType
 	if agentType == "" {
-		agentType = "goclaw"
+		agentType = "goclaw" // default
+	}
+
+	var agentConfigJSON json.RawMessage
+	if agentType == "goclaw" {
+		if bindInfo.AgentConfig != nil && bindInfo.AgentConfig.Goclaw != nil {
+			gc := bindInfo.AgentConfig.Goclaw
+			agentConfigJSON, _ = json.Marshal(map[string]string{
+				"base_url": gc.BaseURL,
+				"api_key":  gc.APIKey,
+				"agent_id": gc.AgentID,
+			})
+		} else {
+			// fallback to flat fields
+			agentConfigJSON, _ = json.Marshal(map[string]string{
+				"base_url": bindInfo.BaseURL,
+				"api_key":  bindInfo.APIKey,
+				"agent_id": bindInfo.AgentID,
+			})
+		}
+	} else if bindInfo.AgentConfig != nil {
+		agentConfigJSON, _ = json.Marshal(bindInfo.AgentConfig)
 	}
 
 	processor, exists := r.agents[agentType]
@@ -94,35 +102,11 @@ func (r *Registry) Process(ctx context.Context, req *AgentRequest) (*AgentRespon
 		ChannelUserID: req.ChannelUserID,
 		Extra: map[string]interface{}{
 			"agent_config": agentConfigJSON,
+			"bind_info":    bindInfo,
 		},
 	}
 
 	return processor.Process(ctx, agentReq)
-}
-
-func (r *Registry) buildGoclawConfig(info *kmyhconfig.CustomerBindInfo) json.RawMessage {
-	config := map[string]string{
-		"base_url": info.BaseURL,
-		"api_key":  info.APIKey,
-		"agent_id": info.AgentID,
-	}
-	data, _ := json.Marshal(config)
-	return data
-}
-
-func (r *Registry) buildGoclawConfigFromMap(m map[string]interface{}) json.RawMessage {
-	config := make(map[string]string)
-	if v, ok := m["base_url"].(string); ok {
-		config["base_url"] = v
-	}
-	if v, ok := m["api_key"].(string); ok {
-		config["api_key"] = v
-	}
-	if v, ok := m["agent_id"].(string); ok {
-		config["agent_id"] = v
-	}
-	data, _ := json.Marshal(config)
-	return data
 }
 
 func (r *Registry) Register(agentType string, processor AgentProcessor) {

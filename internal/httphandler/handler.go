@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 )
 
 type (
@@ -66,6 +67,24 @@ func NewHttpHandler(in inHttpHandlerParam) (*HttpHandler, error) {
 	engine.HidePort = true
 	engine.HideBanner = true
 	engine.Binder = &BinderWithValidation{}
+	engine.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			start := time.Now()
+			req := ctx.Request()
+			err := next(ctx)
+			res := ctx.Response()
+			latency := time.Since(start)
+			in.Logger.Info("HTTP 请求",
+				zap.String("method", req.Method),
+				zap.String("path", req.URL.Path),
+				zap.String("remote_ip", ctx.RealIP()),
+				zap.Int("status", res.Status),
+				zap.Duration("latency", latency),
+				zap.String("user_agent", req.UserAgent()),
+			)
+			return err
+		}
+	})
 	// set http handler
 	httpHandler := &HttpHandler{
 		Engine:   engine,

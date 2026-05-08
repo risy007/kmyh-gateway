@@ -3,7 +3,6 @@ module github.com/risy007/kmyh-gateway
 go 1.24.11
 
 require (
-	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/go-playground/validator/v10 v10.11.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.0
@@ -12,6 +11,7 @@ require (
 	github.com/larksuite/oapi-sdk-go/v3 v3.2.8
 	github.com/nats-io/nats.go v1.45.0
 	github.com/pkg/errors v0.9.1
+	github.com/redis/go-redis/v9 v9.18.0
 	github.com/risy007/kmyh-config v0.0.0-00010101000000-000000000000
 	github.com/xen0n/go-workwx/v2 v2.0.0-alpha.1
 	go.uber.org/fx v1.24.0
@@ -20,9 +20,11 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/denisbrodbeck/machineid v1.0.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
@@ -37,7 +39,6 @@ require (
 	github.com/nats-io/nkeys v0.4.11 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
@@ -50,6 +51,7 @@ require (
 	go.etcd.io/etcd/api/v3 v3.6.7 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.6.7 // indirect
 	go.etcd.io/etcd/client/v3 v3.6.7 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.19.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

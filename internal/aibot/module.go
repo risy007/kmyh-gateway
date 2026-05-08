@@ -13,24 +13,10 @@ var Module = fx.Module("aibot",
 	fx.Invoke(func(lc fx.Lifecycle, cm *ChannelManager, gs *GatewayServer, client *AIBotClient) error {
 		lc.Append(fx.Hook{
 			OnStart: func(ctx context.Context) error {
-				if err := gs.Start(); err != nil {
-					return err
-				}
-
-				if err := gs.SubscribeMigrationEvents(); err != nil {
-					return err
-				}
-
-				channels, err := client.ListChannels(ctx, "", "")
-				if err != nil {
-					return err
-				}
-
-				if err := cm.InitChannels(channels); err != nil {
-					return err
-				}
-
-				return nil
+				return gs.Start()
+			},
+			OnStop: func(ctx context.Context) error {
+				return gs.Stop()
 			},
 		})
 		return nil
